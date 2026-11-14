@@ -4,6 +4,7 @@ import kz.setuplab.data.ComponentCatalog;
 import kz.setuplab.model.ComponentType;
 import kz.setuplab.model.PcBuild;
 import kz.setuplab.model.PcComponent;
+import kz.setuplab.service.CompatibilityService;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -19,13 +20,19 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 
 public class BuildPanel extends JPanel {
     private final JTextField nameField = new JTextField(25);
+
     private final Map<ComponentType, JComboBox<PcComponent>> selectors =
             new EnumMap<>(ComponentType.class);
+
     private final JTextArea resultArea = new JTextArea();
+
+    private final CompatibilityService compatibilityService =
+            new CompatibilityService();
 
     public BuildPanel(ComponentCatalog catalog) {
         setLayout(new BorderLayout(0, 15));
@@ -65,8 +72,7 @@ public class BuildPanel extends JPanel {
         resultArea.setWrapStyleWord(true);
         resultArea.setMargin(new Insets(10, 10, 10, 10));
         resultArea.setText(
-                "Choose components, enter a name and click Create build.\n"
-                        + "Compatibility checks will be added in the next step."
+                "Choose components, enter a name and click Create build."
         );
 
         add(form, BorderLayout.NORTH);
@@ -105,8 +111,30 @@ public class BuildPanel extends JPanel {
 
             PcBuild build = builder.build();
 
+            List<String> errors = compatibilityService.validate(build);
+
+            if (!errors.isEmpty()) {
+                String message = String.join("\n", errors);
+
+                resultArea.setText(
+                        "Build failed compatibility checks:\n\n" + message
+                );
+                resultArea.setCaretPosition(0);
+
+                JOptionPane.showMessageDialog(
+                        this,
+                        message,
+                        "Compatibility error",
+                        JOptionPane.WARNING_MESSAGE
+                );
+
+                return;
+            }
+
             showBuild(build);
         } catch (IllegalArgumentException exception) {
+            resultArea.setText(exception.getMessage());
+
             JOptionPane.showMessageDialog(
                     this,
                     exception.getMessage(),
@@ -132,6 +160,9 @@ public class BuildPanel extends JPanel {
                     .append(" KZT\n");
         }
 
+        int requiredPower =
+                (int) Math.ceil(build.getEstimatedPower() * 1.25);
+
         summary.append("\nTotal price: ")
                 .append(build.getTotalPrice())
                 .append(" KZT\n");
@@ -140,7 +171,11 @@ public class BuildPanel extends JPanel {
                 .append(build.getEstimatedPower())
                 .append(" W\n");
 
-        summary.append("\nCompatibility has not been checked yet.");
+        summary.append("Required PSU capacity with 25% reserve: ")
+                .append(requiredPower)
+                .append(" W\n");
+
+        summary.append("\nCompatibility checks passed.");
 
         resultArea.setText(summary.toString());
         resultArea.setCaretPosition(0);
