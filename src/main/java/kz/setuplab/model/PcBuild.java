@@ -1,3 +1,4 @@
+
 package kz.setuplab.model;
 
 import java.util.EnumMap;
@@ -6,14 +7,23 @@ import java.util.Map;
 import java.util.UUID;
 
 public final class PcBuild {
+
     private final String id;
     private final String name;
     private final List<PcComponent> components;
 
     private PcBuild(Builder builder) {
-        id = UUID.randomUUID().toString();
+
+        // Keep existing ID or generate a new one
+        id = builder.id == null
+                ? UUID.randomUUID().toString()
+                : builder.id;
+
         name = builder.name.trim();
-        components = List.copyOf(builder.components.values());
+
+        components = List.copyOf(
+                builder.components.values()
+        );
     }
 
     public String getId() {
@@ -32,9 +42,11 @@ public final class PcBuild {
         return components.stream()
                 .filter(component -> component.type() == type)
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Missing component: " + type
-                ));
+                .orElseThrow(() ->
+                        new IllegalArgumentException(
+                                "Missing component: " + type
+                        )
+                );
     }
 
     public long getTotalPrice() {
@@ -45,15 +57,32 @@ public final class PcBuild {
 
     public int getEstimatedPower() {
         return components.stream()
-                .filter(component -> component.type() != ComponentType.PSU)
+                .filter(component ->
+                        component.type() != ComponentType.PSU
+                )
                 .mapToInt(PcComponent::powerWatts)
                 .sum();
     }
 
     public static class Builder {
+
+        private String id;
         private String name;
+
         private final Map<ComponentType, PcComponent> components =
                 new EnumMap<>(ComponentType.class);
+
+        // Set existing build ID
+        public Builder id(String id) {
+            if (id == null || id.isBlank()) {
+                throw new IllegalArgumentException(
+                        "Build ID must not be empty."
+                );
+            }
+
+            this.id = id;
+            return this;
+        }
 
         public Builder name(String name) {
             this.name = name;
@@ -61,17 +90,24 @@ public final class PcBuild {
         }
 
         public Builder component(PcComponent component) {
+
             if (component == null) {
-                throw new IllegalArgumentException("Select a component.");
+                throw new IllegalArgumentException(
+                        "Select a component."
+                );
             }
 
             components.put(component.type(), component);
+
             return this;
         }
 
         public PcBuild build() {
+
             if (name == null || name.isBlank()) {
-                throw new IllegalArgumentException("Enter a build name.");
+                throw new IllegalArgumentException(
+                        "Enter a build name."
+                );
             }
 
             if (name.trim().length() > 60) {
@@ -81,6 +117,7 @@ public final class PcBuild {
             }
 
             for (ComponentType type : ComponentType.values()) {
+
                 if (!components.containsKey(type)) {
                     throw new IllegalArgumentException(
                             "Select a component for: " + type
