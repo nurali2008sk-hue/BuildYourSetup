@@ -29,10 +29,7 @@ public class MainFrame extends JFrame {
 
         JTabbedPane tabs = new JTabbedPane();
         tabs.addTab("Component Catalog", new CatalogPanel(catalog));
-        tabs.addTab(
-                "Build Configurator",
-                createPlaceholder("PC build configurator")
-        );
+        tabs.addTab("Build Configurator", new BuildPanel(catalog));
         tabs.addTab(
                 "Saved Builds",
                 createPlaceholder("Your saved builds")
