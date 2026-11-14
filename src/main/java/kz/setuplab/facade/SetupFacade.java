@@ -8,6 +8,9 @@ import kz.setuplab.repository.JsonBuildRepository;
 import kz.setuplab.service.BuildRecommendationService;
 import kz.setuplab.service.CompatibilityService;
 import kz.setuplab.strategy.BuildSelectionStrategy;
+
+import kz.setuplab.observer.BuildEvent;
+import kz.setuplab.observer.BuildEventType;
 import kz.setuplab.observer.BuildEventPublisher;
 import kz.setuplab.observer.BuildObserver;
 
@@ -21,7 +24,6 @@ public class SetupFacade {
     private final BuildRecommendationService recommendationService;
     private final JsonBuildRepository repository;
 
-
     private final BuildEventPublisher publisher =
             new BuildEventPublisher();
 
@@ -34,17 +36,16 @@ public class SetupFacade {
         );
     }
 
-
+    // Observer registration
     public void addObserver(BuildObserver observer) {
         publisher.addObserver(observer);
     }
-
 
     public void removeObserver(BuildObserver observer) {
         publisher.removeObserver(observer);
     }
 
-
+    // Create a new build using Builder
     public PcBuild createBuild(
             String name,
             long budget,
@@ -53,10 +54,13 @@ public class SetupFacade {
         validateBudget(budget);
 
         if (components == null) {
-            throw new IllegalArgumentException("Select components.");
+            throw new IllegalArgumentException(
+                    "Select components."
+            );
         }
 
-        PcBuild.Builder builder = new PcBuild.Builder().name(name);
+        PcBuild.Builder builder =
+                new PcBuild.Builder().name(name);
 
         for (PcComponent component : components) {
             builder.component(component);
@@ -69,7 +73,7 @@ public class SetupFacade {
         return build;
     }
 
-
+    // Recommend build using Strategy
     public PcBuild recommendBuild(
             String name,
             long budget,
@@ -88,7 +92,9 @@ public class SetupFacade {
         return build;
     }
 
+    // Save build and notify observers
     public void saveBuild(PcBuild build) throws IOException {
+
         if (build == null) {
             throw new IllegalArgumentException(
                     "Create a build first."
@@ -97,15 +103,29 @@ public class SetupFacade {
 
         validateBuild(build, Long.MAX_VALUE);
 
+        boolean exists = repository.findAll()
+                .stream()
+                .anyMatch(saved ->
+                        saved.getId().equals(build.getId())
+                );
+
         repository.save(build);
 
-        publisher.notifyObservers(build);
+        BuildEventType type = exists
+                ? BuildEventType.UPDATED
+                : BuildEventType.CREATED;
+
+        publisher.notifyObservers(
+                new BuildEvent(type, build.getId())
+        );
     }
 
+    // Get all saved builds
     public List<PcBuild> getSavedBuilds() throws IOException {
         return repository.findAll();
     }
 
+    // Update existing build
     public PcBuild updateBuild(
             String buildId,
             PcComponent newComponent
@@ -123,9 +143,12 @@ public class SetupFacade {
             );
         }
 
+        // Find existing build
         PcBuild oldBuild = repository.findAll()
                 .stream()
-                .filter(build -> build.getId().equals(buildId))
+                .filter(build ->
+                        build.getId().equals(buildId)
+                )
                 .findFirst()
                 .orElseThrow(() ->
                         new IllegalArgumentException(
@@ -133,6 +156,7 @@ public class SetupFacade {
                         )
                 );
 
+        // Keep the original ID
         PcBuild.Builder builder = new PcBuild.Builder()
                 .id(oldBuild.getId())
                 .name(oldBuild.getName());
@@ -149,15 +173,24 @@ public class SetupFacade {
 
         PcBuild updatedBuild = builder.build();
 
+        // Check compatibility
         validateBuild(updatedBuild, Long.MAX_VALUE);
 
+        // Save updated build
         repository.save(updatedBuild);
 
-        publisher.notifyObservers(updatedBuild);
+        // Notify observers
+        publisher.notifyObservers(
+                new BuildEvent(
+                        BuildEventType.UPDATED,
+                        updatedBuild.getId()
+                )
+        );
 
         return updatedBuild;
     }
 
+    // Delete build
     public boolean deleteBuild(String id) throws IOException {
 
         if (id == null || id.isBlank()) {
@@ -168,10 +201,21 @@ public class SetupFacade {
 
         boolean deleted = repository.deleteById(id);
 
+        if (deleted) {
+            publisher.notifyObservers(
+                    new BuildEvent(
+                            BuildEventType.DELETED,
+                            id
+                    )
+            );
+        }
+
         return deleted;
     }
 
+    // Validate budget
     private void validateBudget(long budget) {
+
         if (budget <= 0) {
             throw new IllegalArgumentException(
                     "Budget must be greater than zero."
@@ -179,9 +223,11 @@ public class SetupFacade {
         }
     }
 
+    // Validate compatibility and price
     private void validateBuild(PcBuild build, long budget) {
 
-        List<String> errors = compatibilityService.validate(build);
+        List<String> errors =
+                compatibilityService.validate(build);
 
         if (!errors.isEmpty()) {
             throw new IllegalArgumentException(

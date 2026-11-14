@@ -1,13 +1,25 @@
 package kz.setuplab.observer;
 
-import kz.setuplab.model.PcBuild;
-
 public class NotificationObserver implements BuildObserver {
 
     @Override
-    public void onBuildChanged(PcBuild build) {
-        System.out.println(
-                "Build updated: " + build.getName()
-        );
+    public void onBuildChanged(BuildEvent event) {
+
+        switch (event.type()) {
+            case CREATED ->
+                    System.out.println(
+                            "Build created: " + event.buildId()
+                    );
+
+            case UPDATED ->
+                    System.out.println(
+                            "Build updated: " + event.buildId()
+                    );
+
+            case DELETED ->
+                    System.out.println(
+                            "Build deleted: " + event.buildId()
+                    );
+        }
     }
 }

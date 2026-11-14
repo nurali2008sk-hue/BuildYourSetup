@@ -1,6 +1,5 @@
 package kz.setuplab.observer;
 
-import kz.setuplab.model.PcBuild;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -10,16 +9,24 @@ public class BuildEventPublisher {
             new ArrayList<>();
 
     public void addObserver(BuildObserver observer) {
-        observers.add(observer);
+        if (observer == null) {
+            throw new IllegalArgumentException(
+                    "Observer cannot be null."
+            );
+        }
+
+        if (!observers.contains(observer)) {
+            observers.add(observer);
+        }
     }
 
     public void removeObserver(BuildObserver observer) {
         observers.remove(observer);
     }
 
-    public void notifyObservers(PcBuild build) {
-        for (BuildObserver observer : observers) {
-            observer.onBuildChanged(build);
+    public void notifyObservers(BuildEvent event) {
+        for (BuildObserver observer : List.copyOf(observers)) {
+            observer.onBuildChanged(event);
         }
     }
 }
