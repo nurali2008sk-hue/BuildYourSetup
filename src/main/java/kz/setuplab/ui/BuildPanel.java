@@ -27,6 +27,7 @@ import java.awt.Insets;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.io.IOException;
 
 public class BuildPanel extends JPanel {
     private final JTextField nameField = new JTextField(25);
@@ -34,6 +35,8 @@ public class BuildPanel extends JPanel {
 
     private final JComboBox<BuildSelectionStrategy> strategyBox =
             new JComboBox<>();
+
+    private PcBuild currentBuild;
 
     private final Map<ComponentType, JComboBox<PcComponent>> selectors =
             new EnumMap<>(ComponentType.class);
@@ -81,9 +84,13 @@ public class BuildPanel extends JPanel {
         JButton createButton = new JButton("Create build");
         createButton.addActionListener(event -> createBuild());
 
+        JButton saveButton = new JButton("Save build");
+        saveButton.addActionListener(event -> saveBuild());
+
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         buttons.add(autoSelectButton);
         buttons.add(createButton);
+        buttons.add(saveButton);
 
         constraints.gridx = 1;
         constraints.gridy = row;
@@ -165,6 +172,8 @@ public class BuildPanel extends JPanel {
                 selectors.get(component.type()).setSelectedItem(component);
             }
 
+            currentBuild = build;
+
             showBuild(
                     build,
                     "Automatically selected using " + strategy.getName()
@@ -176,26 +185,61 @@ public class BuildPanel extends JPanel {
 
     private void createBuild() {
         try {
-            long budget = readBudget();
-
-            List<PcComponent> components = new ArrayList<>();
-
-            for (ComponentType type : ComponentType.values()) {
-                PcComponent component =
-                        (PcComponent) selectors.get(type).getSelectedItem();
-
-                components.add(component);
-            }
-
-            PcBuild build = facade.createBuild(
-                    nameField.getText(),
-                    budget,
-                    components
-            );
+            PcBuild build = buildFromSelection();
 
             showBuild(build, "Created from your current selection");
         } catch (IllegalArgumentException exception) {
             showError(exception.getMessage());
+        }
+    }
+
+    private PcBuild buildFromSelection() {
+        long budget = readBudget();
+
+        List<PcComponent> components = new ArrayList<>();
+
+        for (ComponentType type : ComponentType.values()) {
+            PcComponent component =
+                    (PcComponent) selectors.get(type).getSelectedItem();
+
+            components.add(component);
+        }
+
+        PcBuild candidate = facade.createBuild(
+                nameField.getText(),
+                budget,
+                components
+        );
+
+        boolean unchanged = currentBuild != null
+                && currentBuild.getName().equals(candidate.getName())
+                && currentBuild.getComponents().equals(candidate.getComponents());
+
+        if (!unchanged) {
+            currentBuild = candidate;
+        }
+
+        return currentBuild;
+    }
+
+    private void saveBuild() {
+        try {
+            PcBuild build = buildFromSelection();
+
+            facade.saveBuild(build);
+
+            showBuild(build, "Build saved successfully");
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Build saved to data/builds.json",
+                    "Saved",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+        } catch (IllegalArgumentException exception) {
+            showError(exception.getMessage());
+        } catch (IOException exception) {
+            showError("Could not save build:\n" + exception.getMessage());
         }
     }
 
