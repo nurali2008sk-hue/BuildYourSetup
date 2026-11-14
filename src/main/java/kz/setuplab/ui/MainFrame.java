@@ -1,5 +1,7 @@
 package kz.setuplab.ui;
 
+import kz.setuplab.data.ComponentCatalog;
+
 import javax.swing.BorderFactory;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -12,9 +14,12 @@ import java.awt.Font;
 public class MainFrame extends JFrame {
     public MainFrame() {
         setTitle("Build Your Setup");
-        setSize(1000, 650);
+        setSize(1100, 700);
+        setMinimumSize(new java.awt.Dimension(900, 550));
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
+
+        ComponentCatalog catalog = new ComponentCatalog();
 
         JPanel root = new JPanel(new BorderLayout(0, 16));
         root.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
@@ -23,11 +28,17 @@ public class MainFrame extends JFrame {
         title.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 28));
 
         JTabbedPane tabs = new JTabbedPane();
-        tabs.addTab("Component Catalog", createPlaceholder("Component catalog"));
-        tabs.addTab("Build Configurator", createPlaceholder("PC build configurator"));
-        tabs.addTab("Saved Builds", createPlaceholder("Your saved builds"));
+        tabs.addTab("Component Catalog", new CatalogPanel(catalog));
+        tabs.addTab(
+                "Build Configurator",
+                createPlaceholder("PC build configurator")
+        );
+        tabs.addTab(
+                "Saved Builds",
+                createPlaceholder("Your saved builds")
+        );
 
-        JLabel status = new JLabel("Ready. Select a tab to get started.");
+        JLabel status = new JLabel("Ready. Explore the component catalog.");
 
         root.add(title, BorderLayout.NORTH);
         root.add(tabs, BorderLayout.CENTER);
