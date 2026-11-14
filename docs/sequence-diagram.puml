@@ -1,0 +1,77 @@
+
+@startuml
+title PC Build Configuration - Edit Saved Build
+
+autonumber
+
+actor User
+
+participant "SavedBuildsPanel\n(Swing UI)" as UI
+participant "EditBuildDialog" as Dialog
+participant "SetupFacade\n<<Facade>>" as Facade
+participant "JsonBuildRepository" as Repo
+participant "CompatibilityService" as Service
+participant "BuildEventPublisher\n<<Subject>>" as Publisher
+participant "SavedBuildsObserver\n<<Observer>>" as Observer
+
+User -> UI: Click "Edit selected"
+UI -> Dialog: Open edit dialog
+activate Dialog
+
+User -> Dialog: Select new component
+User -> Dialog: Click "Save changes"
+
+Dialog -> Facade: updateBuild(buildId, newComponent)
+activate Facade
+
+Facade -> Repo: findAll()
+Repo --> Facade: List<PcBuild>
+
+note right of Facade
+Rebuild PC configuration
+with the same build ID
+and replace one component
+end note
+
+Facade -> Service: validate(updatedBuild)
+Service --> Facade: Validation errors
+
+alt Build is compatible
+
+    Facade -> Repo: save(updatedBuild)
+    Repo --> Facade: Saved successfully
+
+    Facade -> Publisher: notifyObservers(UPDATED)
+    activate Publisher
+
+    Publisher -> Observer: onBuildChanged(event)
+    activate Observer
+
+    Observer -> Facade: getSavedBuilds()
+
+    Facade -> Repo: findAll()
+    Repo --> Facade: Updated builds
+    Facade --> Observer: List<PcBuild>
+
+    Observer -> UI: updateBuildList(builds)
+    UI --> Observer: UI refreshed
+
+    deactivate Observer
+    deactivate Publisher
+
+    Facade --> Dialog: Updated PcBuild
+
+    Dialog --> User: Show success message
+
+else Build is incompatible
+
+    Facade --> Dialog: IllegalArgumentException
+
+    Dialog --> User: Show validation error
+
+end
+
+deactivate Facade
+deactivate Dialog
+
+@enduml

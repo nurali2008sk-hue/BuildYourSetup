@@ -28,12 +28,17 @@ public class SetupFacade {
             new BuildEventPublisher();
 
     public SetupFacade(ComponentCatalog catalog) {
+        this(catalog, new JsonBuildRepository(Path.of("data", "builds.json")));
+    }
+
+    public SetupFacade(ComponentCatalog catalog, JsonBuildRepository repository) {
+        if (catalog == null || repository == null) {
+            throw new IllegalArgumentException("Catalog and repository cannot be null.");
+        }
+
         compatibilityService = new CompatibilityService();
         recommendationService = new BuildRecommendationService(catalog);
-
-        repository = new JsonBuildRepository(
-                Path.of("data", "builds.json")
-        );
+        this.repository = repository;
     }
 
     // Observer registration

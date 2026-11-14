@@ -1,3 +1,4 @@
+
 package kz.setuplab.ui;
 
 import kz.setuplab.facade.SetupFacade;
@@ -16,71 +17,117 @@ import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTextArea;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
+
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.FlowLayout;
+import java.awt.Window;
 import java.io.IOException;
 import java.util.List;
 
 public class SavedBuildsPanel extends JPanel {
+
     private final SetupFacade facade;
+    private final List<PcComponent> availableComponents;
 
     private final DefaultListModel<PcBuild> listModel =
             new DefaultListModel<>();
 
-    private final JList<PcBuild> buildList = new JList<>(listModel);
-    private final JTextArea detailsArea = new JTextArea();
-    private final JLabel countLabel = new JLabel("Saved builds: 0");
-    private final JButton deleteButton = new JButton("Delete selected");
+    private final JList<PcBuild> buildList =
+            new JList<>(listModel);
 
-    public SavedBuildsPanel(SetupFacade facade) {
+    private final JTextArea detailsArea =
+            new JTextArea();
+
+    private final JLabel countLabel =
+            new JLabel("Saved builds: 0");
+
+    private final JButton deleteButton =
+            new JButton("Delete selected");
+
+    private final JButton editButton =
+            new JButton("Edit selected");
+
+    public SavedBuildsPanel(
+            SetupFacade facade,
+            List<PcComponent> availableComponents
+    ) {
+
         this.facade = facade;
+        this.availableComponents = List.copyOf(availableComponents);
 
         setLayout(new BorderLayout(0, 12));
-        setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
 
+        setBorder(
+                BorderFactory.createEmptyBorder(15, 15, 15, 15)
+        );
+
+        // Toolbar
         JButton refreshButton = new JButton("Refresh");
-        refreshButton.addActionListener(event -> reloadBuilds());
+
+        refreshButton.addActionListener(
+                event -> reloadBuilds()
+        );
+
+        editButton.setEnabled(false);
+        editButton.addActionListener(
+                event -> editSelected()
+        );
 
         deleteButton.setEnabled(false);
-        deleteButton.addActionListener(event -> deleteSelected());
+        deleteButton.addActionListener(
+                event -> deleteSelected()
+        );
 
-        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JPanel toolbar =
+                new JPanel(new FlowLayout(FlowLayout.LEFT));
+
         toolbar.add(refreshButton);
+        toolbar.add(editButton);
         toolbar.add(deleteButton);
 
-        buildList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        // Build list
+        buildList.setSelectionMode(
+                ListSelectionModel.SINGLE_SELECTION
+        );
+
         buildList.setFixedCellHeight(32);
 
-        buildList.setCellRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(
-                    JList<?> list,
-                    Object value,
-                    int index,
-                    boolean isSelected,
-                    boolean cellHasFocus
-            ) {
-                JLabel label = (JLabel) super.getListCellRendererComponent(
-                        list,
-                        value,
-                        index,
-                        isSelected,
-                        cellHasFocus
-                );
+        buildList.setCellRenderer(
+                new DefaultListCellRenderer() {
 
-                if (value instanceof PcBuild build) {
-                    label.setText(
-                            build.getName()
-                                    + " — "
-                                    + build.getTotalPrice()
-                                    + " KZT"
-                    );
+                    @Override
+                    public Component getListCellRendererComponent(
+                            JList<?> list,
+                            Object value,
+                            int index,
+                            boolean isSelected,
+                            boolean cellHasFocus
+                    ) {
+
+                        JLabel label =
+                                (JLabel) super.getListCellRendererComponent(
+                                        list,
+                                        value,
+                                        index,
+                                        isSelected,
+                                        cellHasFocus
+                                );
+
+                        if (value instanceof PcBuild build) {
+                            label.setText(
+                                    build.getName()
+                                            + " — "
+                                            + build.getTotalPrice()
+                                            + " KZT"
+                            );
+                        }
+
+                        return label;
+                    }
                 }
-
-                return label;
-            }
-        });
+        );
 
         buildList.addListSelectionListener(event -> {
             if (!event.getValueIsAdjusting()) {
@@ -88,11 +135,18 @@ public class SavedBuildsPanel extends JPanel {
             }
         });
 
+        // Build details
         detailsArea.setEditable(false);
         detailsArea.setLineWrap(true);
         detailsArea.setWrapStyleWord(true);
-        detailsArea.setMargin(new java.awt.Insets(10, 10, 10, 10));
-        detailsArea.setText("Open this tab or click Refresh to load builds.");
+
+        detailsArea.setMargin(
+                new java.awt.Insets(10, 10, 10, 10)
+        );
+
+        detailsArea.setText(
+                "Open this tab or click Refresh to load builds."
+        );
 
         JSplitPane splitPane = new JSplitPane(
                 JSplitPane.HORIZONTAL_SPLIT,
@@ -108,38 +162,50 @@ public class SavedBuildsPanel extends JPanel {
         add(countLabel, BorderLayout.SOUTH);
     }
 
+    // Edit selected build
+    private void editSelected() {
+
+        PcBuild selectedBuild = buildList.getSelectedValue();
+
+        if (selectedBuild == null) {
+            return;
+        }
+
+        Window owner =
+                SwingUtilities.getWindowAncestor(this);
+
+        EditBuildDialog dialog = new EditBuildDialog(
+                owner,
+                facade,
+                selectedBuild,
+                availableComponents
+        );
+
+        dialog.setVisible(true);
+    }
+
+    // Load saved builds
     public void reloadBuilds() {
-        PcBuild selected = buildList.getSelectedValue();
-        String selectedId = selected == null ? null : selected.getId();
 
         try {
             List<PcBuild> builds = facade.getSavedBuilds();
 
-            listModel.clear();
+            updateBuildList(builds);
 
-            int selectionIndex = 0;
-
-            for (int index = 0; index < builds.size(); index++) {
-                PcBuild build = builds.get(index);
-                listModel.addElement(build);
-
-                if (build.getId().equals(selectedId)) {
-                    selectionIndex = index;
-                }
-            }
-
-            countLabel.setText("Saved builds: " + builds.size());
-
-            if (builds.isEmpty()) {
-                showSelected();
-            } else {
-                buildList.setSelectedIndex(selectionIndex);
-            }
         } catch (IOException exception) {
+
             listModel.clear();
+
+            editButton.setEnabled(false);
             deleteButton.setEnabled(false);
-            countLabel.setText("Could not load saved builds");
-            detailsArea.setText(exception.getMessage());
+
+            countLabel.setText(
+                    "Could not load saved builds"
+            );
+
+            detailsArea.setText(
+                    exception.getMessage()
+            );
 
             JOptionPane.showMessageDialog(
                     this,
@@ -150,12 +216,61 @@ public class SavedBuildsPanel extends JPanel {
         }
     }
 
+    // Observer callback
+    public void updateBuildList(List<PcBuild> builds) {
+
+        if (!SwingUtilities.isEventDispatchThread()) {
+
+            SwingUtilities.invokeLater(
+                    () -> updateBuildList(builds)
+            );
+
+            return;
+        }
+
+        PcBuild selected = buildList.getSelectedValue();
+
+        String selectedId = selected == null
+                ? null
+                : selected.getId();
+
+        listModel.clear();
+
+        int selectionIndex = 0;
+
+        for (int index = 0; index < builds.size(); index++) {
+
+            PcBuild build = builds.get(index);
+
+            listModel.addElement(build);
+
+            if (build.getId().equals(selectedId)) {
+                selectionIndex = index;
+            }
+        }
+
+        countLabel.setText(
+                "Saved builds: " + builds.size()
+        );
+
+        if (builds.isEmpty()) {
+            showSelected();
+        } else {
+            buildList.setSelectedIndex(selectionIndex);
+            showSelected();
+        }
+    }
+
+    // Display selected build
     private void showSelected() {
+
         PcBuild build = buildList.getSelectedValue();
 
+        editButton.setEnabled(build != null);
         deleteButton.setEnabled(build != null);
 
         if (build == null) {
+
             detailsArea.setText("No build selected.");
             return;
         }
@@ -167,6 +282,7 @@ public class SavedBuildsPanel extends JPanel {
                 .append("\n\n");
 
         for (PcComponent component : build.getComponents()) {
+
             text.append(component.type())
                     .append(": ")
                     .append(component.name())
@@ -175,7 +291,8 @@ public class SavedBuildsPanel extends JPanel {
                     .append(" KZT\n");
         }
 
-        int score = build.getComponents().stream()
+        int score = build.getComponents()
+                .stream()
                 .mapToInt(PcComponent::performanceScore)
                 .sum();
 
@@ -198,7 +315,9 @@ public class SavedBuildsPanel extends JPanel {
         detailsArea.setCaretPosition(0);
     }
 
+    // Delete selected build
     private void deleteSelected() {
+
         PcBuild build = buildList.getSelectedValue();
 
         if (build == null) {
@@ -218,12 +337,16 @@ public class SavedBuildsPanel extends JPanel {
         }
 
         try {
+
+            // Observer automatically refreshes the list
             facade.deleteBuild(build.getId());
-            reloadBuilds();
+
         } catch (IOException exception) {
+
             JOptionPane.showMessageDialog(
                     this,
-                    "Could not delete build:\n" + exception.getMessage(),
+                    "Could not delete build:\n"
+                            + exception.getMessage(),
                     "Deletion error",
                     JOptionPane.ERROR_MESSAGE
             );
