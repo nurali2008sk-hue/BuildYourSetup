@@ -45,8 +45,8 @@ public class BuildPanel extends JPanel {
 
     private final SetupFacade facade;
 
-    public BuildPanel(ComponentCatalog catalog) {
-        facade = new SetupFacade(catalog);
+    public BuildPanel(ComponentCatalog catalog, SetupFacade facade) {
+        this.facade = new SetupFacade(catalog);
 
         setLayout(new BorderLayout(0, 15));
         setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));

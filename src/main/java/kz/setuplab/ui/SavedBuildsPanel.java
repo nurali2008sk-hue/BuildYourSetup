@@ -1,0 +1,232 @@
+package kz.setuplab.ui;
+
+import kz.setuplab.facade.SetupFacade;
+import kz.setuplab.model.PcBuild;
+import kz.setuplab.model.PcComponent;
+
+import javax.swing.BorderFactory;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.DefaultListModel;
+import javax.swing.JButton;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
+import javax.swing.JTextArea;
+import javax.swing.ListSelectionModel;
+import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.FlowLayout;
+import java.io.IOException;
+import java.util.List;
+
+public class SavedBuildsPanel extends JPanel {
+    private final SetupFacade facade;
+
+    private final DefaultListModel<PcBuild> listModel =
+            new DefaultListModel<>();
+
+    private final JList<PcBuild> buildList = new JList<>(listModel);
+    private final JTextArea detailsArea = new JTextArea();
+    private final JLabel countLabel = new JLabel("Saved builds: 0");
+    private final JButton deleteButton = new JButton("Delete selected");
+
+    public SavedBuildsPanel(SetupFacade facade) {
+        this.facade = facade;
+
+        setLayout(new BorderLayout(0, 12));
+        setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+
+        JButton refreshButton = new JButton("Refresh");
+        refreshButton.addActionListener(event -> reloadBuilds());
+
+        deleteButton.setEnabled(false);
+        deleteButton.addActionListener(event -> deleteSelected());
+
+        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        toolbar.add(refreshButton);
+        toolbar.add(deleteButton);
+
+        buildList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        buildList.setFixedCellHeight(32);
+
+        buildList.setCellRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(
+                    JList<?> list,
+                    Object value,
+                    int index,
+                    boolean isSelected,
+                    boolean cellHasFocus
+            ) {
+                JLabel label = (JLabel) super.getListCellRendererComponent(
+                        list,
+                        value,
+                        index,
+                        isSelected,
+                        cellHasFocus
+                );
+
+                if (value instanceof PcBuild build) {
+                    label.setText(
+                            build.getName()
+                                    + " — "
+                                    + build.getTotalPrice()
+                                    + " KZT"
+                    );
+                }
+
+                return label;
+            }
+        });
+
+        buildList.addListSelectionListener(event -> {
+            if (!event.getValueIsAdjusting()) {
+                showSelected();
+            }
+        });
+
+        detailsArea.setEditable(false);
+        detailsArea.setLineWrap(true);
+        detailsArea.setWrapStyleWord(true);
+        detailsArea.setMargin(new java.awt.Insets(10, 10, 10, 10));
+        detailsArea.setText("Open this tab or click Refresh to load builds.");
+
+        JSplitPane splitPane = new JSplitPane(
+                JSplitPane.HORIZONTAL_SPLIT,
+                new JScrollPane(buildList),
+                new JScrollPane(detailsArea)
+        );
+
+        splitPane.setResizeWeight(0.35);
+        splitPane.setDividerLocation(320);
+
+        add(toolbar, BorderLayout.NORTH);
+        add(splitPane, BorderLayout.CENTER);
+        add(countLabel, BorderLayout.SOUTH);
+    }
+
+    public void reloadBuilds() {
+        PcBuild selected = buildList.getSelectedValue();
+        String selectedId = selected == null ? null : selected.getId();
+
+        try {
+            List<PcBuild> builds = facade.getSavedBuilds();
+
+            listModel.clear();
+
+            int selectionIndex = 0;
+
+            for (int index = 0; index < builds.size(); index++) {
+                PcBuild build = builds.get(index);
+                listModel.addElement(build);
+
+                if (build.getId().equals(selectedId)) {
+                    selectionIndex = index;
+                }
+            }
+
+            countLabel.setText("Saved builds: " + builds.size());
+
+            if (builds.isEmpty()) {
+                showSelected();
+            } else {
+                buildList.setSelectedIndex(selectionIndex);
+            }
+        } catch (IOException exception) {
+            listModel.clear();
+            deleteButton.setEnabled(false);
+            countLabel.setText("Could not load saved builds");
+            detailsArea.setText(exception.getMessage());
+
+            JOptionPane.showMessageDialog(
+                    this,
+                    exception.getMessage(),
+                    "Loading error",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
+    }
+
+    private void showSelected() {
+        PcBuild build = buildList.getSelectedValue();
+
+        deleteButton.setEnabled(build != null);
+
+        if (build == null) {
+            detailsArea.setText("No build selected.");
+            return;
+        }
+
+        StringBuilder text = new StringBuilder();
+
+        text.append("Build: ")
+                .append(build.getName())
+                .append("\n\n");
+
+        for (PcComponent component : build.getComponents()) {
+            text.append(component.type())
+                    .append(": ")
+                    .append(component.name())
+                    .append(" — ")
+                    .append(component.price())
+                    .append(" KZT\n");
+        }
+
+        int score = build.getComponents().stream()
+                .mapToInt(PcComponent::performanceScore)
+                .sum();
+
+        text.append("\nTotal price: ")
+                .append(build.getTotalPrice())
+                .append(" KZT\n");
+
+        text.append("Demo performance score: ")
+                .append(score)
+                .append("\n");
+
+        text.append("Estimated component power: ")
+                .append(build.getEstimatedPower())
+                .append(" W\n");
+
+        text.append("\nBuild ID: ")
+                .append(build.getId());
+
+        detailsArea.setText(text.toString());
+        detailsArea.setCaretPosition(0);
+    }
+
+    private void deleteSelected() {
+        PcBuild build = buildList.getSelectedValue();
+
+        if (build == null) {
+            return;
+        }
+
+        int answer = JOptionPane.showConfirmDialog(
+                this,
+                "Delete build \"" + build.getName() + "\"?",
+                "Confirm deletion",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE
+        );
+
+        if (answer != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        try {
+            facade.deleteBuild(build.getId());
+            reloadBuilds();
+        } catch (IOException exception) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Could not delete build:\n" + exception.getMessage(),
+                    "Deletion error",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
+    }
+}
