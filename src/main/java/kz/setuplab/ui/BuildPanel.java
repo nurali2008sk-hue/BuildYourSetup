@@ -4,12 +4,12 @@ import kz.setuplab.data.ComponentCatalog;
 import kz.setuplab.model.ComponentType;
 import kz.setuplab.model.PcBuild;
 import kz.setuplab.model.PcComponent;
-import kz.setuplab.service.BuildRecommendationService;
-import kz.setuplab.service.CompatibilityService;
 import kz.setuplab.strategy.BuildSelectionStrategy;
 import kz.setuplab.strategy.EconomyStrategy;
 import kz.setuplab.strategy.PerformanceStrategy;
+import kz.setuplab.facade.SetupFacade;
 
+import java.util.ArrayList;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -40,13 +40,10 @@ public class BuildPanel extends JPanel {
 
     private final JTextArea resultArea = new JTextArea();
 
-    private final CompatibilityService compatibilityService =
-            new CompatibilityService();
-
-    private final BuildRecommendationService recommendationService;
+    private final SetupFacade facade;
 
     public BuildPanel(ComponentCatalog catalog) {
-        recommendationService = new BuildRecommendationService(catalog);
+        facade = new SetupFacade(catalog);
 
         setLayout(new BorderLayout(0, 15));
         setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
@@ -158,7 +155,7 @@ public class BuildPanel extends JPanel {
             BuildSelectionStrategy strategy =
                     (BuildSelectionStrategy) strategyBox.getSelectedItem();
 
-            PcBuild build = recommendationService.recommend(
+            PcBuild build = facade.recommendBuild(
                     nameField.getText(),
                     budget,
                     strategy
@@ -181,33 +178,20 @@ public class BuildPanel extends JPanel {
         try {
             long budget = readBudget();
 
-            PcBuild.Builder builder = new PcBuild.Builder()
-                    .name(nameField.getText());
+            List<PcComponent> components = new ArrayList<>();
 
             for (ComponentType type : ComponentType.values()) {
                 PcComponent component =
                         (PcComponent) selectors.get(type).getSelectedItem();
 
-                builder.component(component);
+                components.add(component);
             }
 
-            PcBuild build = builder.build();
-
-            List<String> errors = compatibilityService.validate(build);
-
-            if (!errors.isEmpty()) {
-                throw new IllegalArgumentException(
-                        String.join("\n", errors)
-                );
-            }
-
-            if (build.getTotalPrice() > budget) {
-                throw new IllegalArgumentException(
-                        "Build exceeds your budget by "
-                                + (build.getTotalPrice() - budget)
-                                + " KZT."
-                );
-            }
+            PcBuild build = facade.createBuild(
+                    nameField.getText(),
+                    budget,
+                    components
+            );
 
             showBuild(build, "Created from your current selection");
         } catch (IllegalArgumentException exception) {
