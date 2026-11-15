@@ -13,11 +13,16 @@ import kz.setuplab.decorator.BasePricedBuild;
 import kz.setuplab.decorator.AssemblyDecorator;
 import kz.setuplab.decorator.WarrantyDecorator;
 import kz.setuplab.decorator.OsInstallationDecorator;
+import kz.setuplab.export.BuildExporter;
+import kz.setuplab.export.ExportFactory;
+import kz.setuplab.export.TxtExportFactory;
+import kz.setuplab.export.HtmlExportFactory;
 
 import java.util.ArrayList;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JFileChooser;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -34,6 +39,8 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 public class BuildPanel extends JPanel {
     private final JTextField nameField = new JTextField(25);
@@ -105,10 +112,18 @@ public class BuildPanel extends JPanel {
         JButton saveButton = new JButton("Save build");
         saveButton.addActionListener(event -> saveBuild());
 
+        JButton exportTxtButton = new JButton("Export TXT");
+        exportTxtButton.addActionListener(event -> exportBuild(new TxtExportFactory()));
+
+        JButton exportHtmlButton = new JButton("Export HTML");
+        exportHtmlButton.addActionListener(event -> exportBuild(new HtmlExportFactory()));
+
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         buttons.add(autoSelectButton);
         buttons.add(createButton);
         buttons.add(saveButton);
+        buttons.add(exportTxtButton);
+        buttons.add(exportHtmlButton);
 
         constraints.gridx = 1;
         constraints.gridy = row;
@@ -383,5 +398,51 @@ public class BuildPanel extends JPanel {
             showBuild(currentBuild, "Current build preview");
         }
     }
+
+    private void exportBuild(ExportFactory factory) {
+        try {
+            PcBuild build = buildFromSelection();
+            PricedBuild pricedBuild = applyServices(build);
+            long budget = readBudget();
+
+            if (pricedBuild.getPrice() > budget) {
+                throw new IllegalArgumentException("Build with services exceeds your budget.");
+            }
+
+            BuildExporter exporter = factory.createExporter();
+            JFileChooser chooser = new JFileChooser();
+            chooser.setSelectedFile(new java.io.File("pc-build." + exporter.getExtension()));
+
+            if (chooser.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
+                return;
+            }
+
+            Path destination = chooser.getSelectedFile().toPath();
+            if (Files.exists(destination)) {
+                int choice = JOptionPane.showConfirmDialog(
+                        this,
+                        "Replace the existing file?",
+                        "Confirm overwrite",
+                        JOptionPane.YES_NO_OPTION
+                );
+                if (choice != JOptionPane.YES_OPTION) {
+                    return;
+                }
+            }
+
+            factory.exportToFile(build, pricedBuild, destination);
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Build exported successfully:\n" + destination,
+                    "Export successful",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+        } catch (IllegalArgumentException | ArithmeticException exception) {
+            showError(exception.getMessage());
+        } catch (IOException exception) {
+            showError("Export failed:\n" + exception.getMessage());
+        }
+    }
+
 
 }
