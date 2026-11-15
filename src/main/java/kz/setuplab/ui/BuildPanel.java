@@ -41,6 +41,8 @@ import java.util.Map;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import kz.setuplab.repository.BuildServiceRepository;
+import kz.setuplab.repository.BuildServiceRepository.ServiceSelection;
 
 public class BuildPanel extends JPanel {
     private final JTextField nameField = new JTextField(25);
@@ -61,6 +63,19 @@ public class BuildPanel extends JPanel {
     private final JTextArea resultArea = new JTextArea();
 
     private final SetupFacade facade;
+
+    private final BuildServiceRepository serviceRepository =
+            new BuildServiceRepository(
+                    Path.of("data", "build-services.json")
+            );
+
+    private ServiceSelection getSelectedServices() {
+        return new ServiceSelection(
+                assemblyBox.isSelected(),
+                warrantyBox.isSelected(),
+                osBox.isSelected()
+        );
+    }
 
     public BuildPanel(ComponentCatalog catalog, SetupFacade facade) {
         this.facade = java.util.Objects.requireNonNull(facade);
@@ -259,26 +274,73 @@ public class BuildPanel extends JPanel {
         return currentBuild;
     }
 
+
     private void saveBuild() {
         try {
             PcBuild build = buildFromSelection();
 
             facade.saveBuild(build);
 
+            serviceRepository.save(
+                    build.getId(),
+                    getSelectedServices()
+            );
+
             showBuild(build, "Build saved successfully");
 
             JOptionPane.showMessageDialog(
                     this,
-                    "Build saved to data/builds.json",
+                    "Build and selected services saved successfully.",
                     "Saved",
                     JOptionPane.INFORMATION_MESSAGE
             );
-        } catch (IllegalArgumentException exception) {
+        } catch (IllegalArgumentException | ArithmeticException exception) {
             showError(exception.getMessage());
         } catch (IOException exception) {
             showError("Could not save build:\n" + exception.getMessage());
         }
     }
+
+
+    public void loadBuild(PcBuild build) throws IOException {
+        if (build == null) {
+            throw new IllegalArgumentException("Build cannot be null.");
+        }
+
+        ServiceSelection services =
+                serviceRepository.findByBuildId(build.getId());
+
+        nameField.setText(build.getName());
+
+        for (PcComponent component : build.getComponents()) {
+            JComboBox<PcComponent> selector =
+                    selectors.get(component.type());
+
+            if (selector != null) {
+                selector.setSelectedItem(component);
+            }
+        }
+
+        assemblyBox.setSelected(services.assembly());
+        warrantyBox.setSelected(services.warranty());
+        osBox.setSelected(services.osInstallation());
+
+        currentBuild = build;
+
+        long finalPrice = applyServices(build).getPrice();
+        long currentBudget;
+        try {
+            currentBudget = Long.parseLong(budgetField.getText().trim());
+        } catch (NumberFormatException exception) {
+            currentBudget = 0;
+        }
+        if (currentBudget < finalPrice) {
+            budgetField.setText(Long.toString(finalPrice));
+        }
+
+        showBuild(build, "Loaded saved build");
+    }
+
 
     private void showError(String message) {
         resultArea.setText(message);

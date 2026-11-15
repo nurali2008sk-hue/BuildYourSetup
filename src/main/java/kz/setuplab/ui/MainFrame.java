@@ -46,11 +46,23 @@ public class MainFrame extends JFrame {
         BuildPanel buildPanel =
                 new BuildPanel(catalog, facade);
 
-        // Pass all available components to the editor
         SavedBuildsPanel savedBuildsPanel =
                 new SavedBuildsPanel(
                         facade,
-                        catalog.getAll()
+                        catalog.getAll(),
+                        build -> {
+                            try {
+                                buildPanel.loadBuild(build);
+                                tabs.setSelectedComponent(buildPanel);
+                            } catch (java.io.IOException exception) {
+                                javax.swing.JOptionPane.showMessageDialog(
+                                        this,
+                                        exception.getMessage(),
+                                        "Loading error",
+                                        javax.swing.JOptionPane.ERROR_MESSAGE
+                                );
+                            }
+                        }
                 );
 
         // Register Observer

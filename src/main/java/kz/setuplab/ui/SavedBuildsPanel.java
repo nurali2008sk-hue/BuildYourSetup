@@ -4,6 +4,8 @@ package kz.setuplab.ui;
 import kz.setuplab.facade.SetupFacade;
 import kz.setuplab.model.PcBuild;
 import kz.setuplab.model.PcComponent;
+import kz.setuplab.repository.BuildServiceRepository;
+import kz.setuplab.repository.BuildServiceRepository.ServiceSelection;
 
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
@@ -25,11 +27,17 @@ import java.awt.FlowLayout;
 import java.awt.Window;
 import java.io.IOException;
 import java.util.List;
+import java.nio.file.Path;
+import java.util.function.Consumer;
 
 public class SavedBuildsPanel extends JPanel {
 
     private final SetupFacade facade;
     private final List<PcComponent> availableComponents;
+    private final Consumer<PcBuild> onLoadBuild;
+    private final BuildServiceRepository serviceRepository =
+            new BuildServiceRepository(Path.of("data", "build-services.json"));
+    private final JButton loadButton = new JButton("Load in Configurator");
 
     private final DefaultListModel<PcBuild> listModel =
             new DefaultListModel<>();
@@ -51,11 +59,13 @@ public class SavedBuildsPanel extends JPanel {
 
     public SavedBuildsPanel(
             SetupFacade facade,
-            List<PcComponent> availableComponents
+            List<PcComponent> availableComponents,
+            Consumer<PcBuild> onLoadBuild
     ) {
 
         this.facade = facade;
         this.availableComponents = List.copyOf(availableComponents);
+        this.onLoadBuild = java.util.Objects.requireNonNull(onLoadBuild);
 
         setLayout(new BorderLayout(0, 12));
 
@@ -80,10 +90,19 @@ public class SavedBuildsPanel extends JPanel {
                 event -> deleteSelected()
         );
 
+        loadButton.setEnabled(false);
+        loadButton.addActionListener(event -> {
+            PcBuild selected = buildList.getSelectedValue();
+            if (selected != null) {
+                onLoadBuild.accept(selected);
+            }
+        });
+
         JPanel toolbar =
                 new JPanel(new FlowLayout(FlowLayout.LEFT));
 
         toolbar.add(refreshButton);
+        toolbar.add(loadButton);
         toolbar.add(editButton);
         toolbar.add(deleteButton);
 
@@ -198,6 +217,7 @@ public class SavedBuildsPanel extends JPanel {
 
             editButton.setEnabled(false);
             deleteButton.setEnabled(false);
+            loadButton.setEnabled(false);
 
             countLabel.setText(
                     "Could not load saved builds"
@@ -268,6 +288,7 @@ public class SavedBuildsPanel extends JPanel {
 
         editButton.setEnabled(build != null);
         deleteButton.setEnabled(build != null);
+        loadButton.setEnabled(build != null);
 
         if (build == null) {
 
@@ -296,9 +317,26 @@ public class SavedBuildsPanel extends JPanel {
                 .mapToInt(PcComponent::performanceScore)
                 .sum();
 
-        text.append("\nTotal price: ")
+        text.append("\nComponents price: ")
                 .append(build.getTotalPrice())
                 .append(" KZT\n");
+        try {
+            ServiceSelection services = serviceRepository.findByBuildId(build.getId());
+            text.append("Optional services:\n");
+            if (services.assembly()) text.append("Professional assembly: +15000 KZT\n");
+            if (services.warranty()) text.append("Extended warranty: +20000 KZT\n");
+            if (services.osInstallation()) text.append("OS installation: +10000 KZT\n");
+            if (!services.assembly() && !services.warranty() && !services.osInstallation()) {
+                text.append("None\n");
+            }
+            text.append("Final price with services: ")
+                    .append(getFinalPrice(build))
+                    .append(" KZT\n");
+        } catch (IOException | ArithmeticException exception) {
+            text.append("Could not load service prices: ")
+                    .append(exception.getMessage())
+                    .append("\n");
+        }
 
         text.append("Demo performance score: ")
                 .append(score)
@@ -313,6 +351,15 @@ public class SavedBuildsPanel extends JPanel {
 
         detailsArea.setText(text.toString());
         detailsArea.setCaretPosition(0);
+    }
+
+    private long getFinalPrice(PcBuild build) throws IOException {
+        ServiceSelection services = serviceRepository.findByBuildId(build.getId());
+        long price = build.getTotalPrice();
+        if (services.assembly()) price = Math.addExact(price, 15000);
+        if (services.warranty()) price = Math.addExact(price, 20000);
+        if (services.osInstallation()) price = Math.addExact(price, 10000);
+        return price;
     }
 
     // Delete selected build
@@ -339,7 +386,10 @@ public class SavedBuildsPanel extends JPanel {
         try {
 
             // Observer automatically refreshes the list
-            facade.deleteBuild(build.getId());
+            boolean deleted = facade.deleteBuild(build.getId());
+            if (deleted) {
+                serviceRepository.delete(build.getId());
+            }
 
         } catch (IOException exception) {
 
