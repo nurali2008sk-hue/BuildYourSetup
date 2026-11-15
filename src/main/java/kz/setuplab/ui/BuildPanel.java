@@ -8,10 +8,16 @@ import kz.setuplab.strategy.BuildSelectionStrategy;
 import kz.setuplab.strategy.EconomyStrategy;
 import kz.setuplab.strategy.PerformanceStrategy;
 import kz.setuplab.facade.SetupFacade;
+import kz.setuplab.decorator.PricedBuild;
+import kz.setuplab.decorator.BasePricedBuild;
+import kz.setuplab.decorator.AssemblyDecorator;
+import kz.setuplab.decorator.WarrantyDecorator;
+import kz.setuplab.decorator.OsInstallationDecorator;
 
 import java.util.ArrayList;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -38,6 +44,10 @@ public class BuildPanel extends JPanel {
 
     private PcBuild currentBuild;
 
+    private final JCheckBox assemblyBox = new JCheckBox("Professional assembly (+15000 KZT)");
+    private final JCheckBox warrantyBox = new JCheckBox("Extended warranty (+20000 KZT)");
+    private final JCheckBox osBox = new JCheckBox("OS installation (+10000 KZT)");
+
     private final Map<ComponentType, JComboBox<PcComponent>> selectors =
             new EnumMap<>(ComponentType.class);
 
@@ -46,7 +56,7 @@ public class BuildPanel extends JPanel {
     private final SetupFacade facade;
 
     public BuildPanel(ComponentCatalog catalog, SetupFacade facade) {
-        this.facade = new SetupFacade(catalog);
+        this.facade = java.util.Objects.requireNonNull(facade);
 
         setLayout(new BorderLayout(0, 15));
         setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
@@ -78,6 +88,14 @@ public class BuildPanel extends JPanel {
             addFormRow(form, constraints, row++, type + ":", selector);
         }
 
+        addFormRow(form, constraints, row++, "Assembly:", assemblyBox);
+        addFormRow(form, constraints, row++, "Warranty:", warrantyBox);
+        addFormRow(form, constraints, row++, "Operating system:", osBox);
+
+        assemblyBox.addActionListener(event -> refreshPrice());
+        warrantyBox.addActionListener(event -> refreshPrice());
+        osBox.addActionListener(event -> refreshPrice());
+
         JButton autoSelectButton = new JButton("Auto select");
         autoSelectButton.addActionListener(event -> autoSelect());
 
@@ -104,7 +122,7 @@ public class BuildPanel extends JPanel {
         resultArea.setText(
                 "Enter a build name and budget.\n"
                         + "Use Auto select or choose components manually.\n"
-                        + "The budget applies to both actions."
+                        + "The budget includes selected services."
         );
 
         add(form, BorderLayout.NORTH);
@@ -162,9 +180,11 @@ public class BuildPanel extends JPanel {
             BuildSelectionStrategy strategy =
                     (BuildSelectionStrategy) strategyBox.getSelectedItem();
 
+            long componentBudget = budgetForComponents(budget);
+
             PcBuild build = facade.recommendBuild(
                     nameField.getText(),
-                    budget,
+                    componentBudget,
                     strategy
             );
 
@@ -205,9 +225,11 @@ public class BuildPanel extends JPanel {
             components.add(component);
         }
 
+        long componentBudget = budgetForComponents(budget);
+
         PcBuild candidate = facade.createBuild(
                 nameField.getText(),
-                budget,
+                componentBudget,
                 components
         );
 
@@ -279,8 +301,28 @@ public class BuildPanel extends JPanel {
                 .mapToInt(PcComponent::performanceScore)
                 .sum();
 
-        summary.append("\nTotal price: ")
+        PricedBuild pricedBuild = applyServices(build);
+
+        summary.append("\nComponents price: ")
                 .append(build.getTotalPrice())
+                .append(" KZT\n");
+
+        summary.append("\nOptional services:\n");
+        if (assemblyBox.isSelected()) {
+            summary.append("Professional assembly: +15000 KZT\n");
+        }
+        if (warrantyBox.isSelected()) {
+            summary.append("Extended warranty: +20000 KZT\n");
+        }
+        if (osBox.isSelected()) {
+            summary.append("OS installation: +10000 KZT\n");
+        }
+        if (!assemblyBox.isSelected() && !warrantyBox.isSelected() && !osBox.isSelected()) {
+            summary.append("None\n");
+        }
+
+        summary.append("\nFinal price: ")
+                .append(pricedBuild.getPrice())
                 .append(" KZT\n");
 
         summary.append("Demo performance score: ")
@@ -300,4 +342,46 @@ public class BuildPanel extends JPanel {
         resultArea.setText(summary.toString());
         resultArea.setCaretPosition(0);
     }
+    private PricedBuild applyServices(PcBuild build) {
+        PricedBuild result = new BasePricedBuild(build);
+        if (assemblyBox.isSelected()) {
+            result = new AssemblyDecorator(result);
+        }
+        if (warrantyBox.isSelected()) {
+            result = new WarrantyDecorator(result);
+        }
+        if (osBox.isSelected()) {
+            result = new OsInstallationDecorator(result);
+        }
+        return result;
+    }
+
+    private long selectedServicesPrice() {
+        long total = 0;
+        if (assemblyBox.isSelected()) {
+            total = Math.addExact(total, AssemblyDecorator.PRICE);
+        }
+        if (warrantyBox.isSelected()) {
+            total = Math.addExact(total, WarrantyDecorator.PRICE);
+        }
+        if (osBox.isSelected()) {
+            total = Math.addExact(total, OsInstallationDecorator.PRICE);
+        }
+        return total;
+    }
+
+    private long budgetForComponents(long budget) {
+        long remaining = budget - selectedServicesPrice();
+        if (remaining <= 0) {
+            throw new IllegalArgumentException("Selected services leave no budget for components.");
+        }
+        return remaining;
+    }
+
+    private void refreshPrice() {
+        if (currentBuild != null) {
+            showBuild(currentBuild, "Current build preview");
+        }
+    }
+
 }
