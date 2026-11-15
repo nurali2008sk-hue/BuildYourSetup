@@ -22,4 +22,4 @@ public class NotificationObserver implements BuildObserver {
                     );
         }
     }
-}g
+}
