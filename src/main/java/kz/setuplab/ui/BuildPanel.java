@@ -300,4 +300,4 @@ public class BuildPanel extends JPanel {
         resultArea.setText(summary.toString());
         resultArea.setCaretPosition(0);
     }
-} //helloooo tetoooo 67
+}
