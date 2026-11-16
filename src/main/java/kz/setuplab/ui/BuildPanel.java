@@ -133,7 +133,11 @@ public class BuildPanel extends JPanel {
         JButton exportHtmlButton = new JButton("Export HTML");
         exportHtmlButton.addActionListener(event -> exportBuild(new HtmlExportFactory()));
 
+        JButton newButton = new JButton("New build");
+        newButton.addActionListener(event -> startNewBuild());
+
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        buttons.add(newButton);
         buttons.add(autoSelectButton);
         buttons.add(createButton);
         buttons.add(saveButton);
@@ -222,6 +226,7 @@ public class BuildPanel extends JPanel {
                 selectors.get(component.type()).setSelectedItem(component);
             }
 
+            build = keepCurrentId(build);
             currentBuild = build;
 
             showBuild(
@@ -263,15 +268,37 @@ public class BuildPanel extends JPanel {
                 components
         );
 
-        boolean unchanged = currentBuild != null
-                && currentBuild.getName().equals(candidate.getName())
-                && currentBuild.getComponents().equals(candidate.getComponents());
-
-        if (!unchanged) {
-            currentBuild = candidate;
-        }
+        currentBuild = keepCurrentId(candidate);
 
         return currentBuild;
+    }
+
+    private PcBuild keepCurrentId(PcBuild candidate) {
+        if (currentBuild == null) {
+            return candidate;
+        }
+
+        PcBuild.Builder builder = new PcBuild.Builder()
+                .id(currentBuild.getId())
+                .name(candidate.getName());
+
+        for (PcComponent component : candidate.getComponents()) {
+            builder.component(component);
+        }
+
+        return builder.build();
+    }
+
+    private void startNewBuild() {
+        currentBuild = null;
+        nameField.setText("");
+
+        resultArea.setText(
+                "New build started. Enter a name and configure components."
+        );
+
+        resultArea.setCaretPosition(0);
+        nameField.requestFocusInWindow();
     }
 
 
