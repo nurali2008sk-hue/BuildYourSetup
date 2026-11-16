@@ -1,0 +1,187 @@
+@startuml BuildYourSetup_ClassDiagram
+!theme plain
+title BuildYourSetup - UML Class Diagram
+left to right direction
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "Model / Builder" #EAF3FF {
+  class PcBuild {
+    - id: String
+    - name: String
+    - components: List<PcComponent>
+    + getId(): String
+    + getComponents(): List<PcComponent>
+    + getTotalPrice(): long
+  }
+  class "PcBuild.Builder" as PcBuildBuilder <<Builder>> {
+    + id(id: String): Builder
+    + name(name: String): Builder
+    + component(component: PcComponent): Builder
+    + build(): PcBuild
+  }
+  class PcComponent <<record>> {
+    + id: String
+    + name: String
+    + type: ComponentType
+    + price: long
+    + performanceScore: int
+  }
+  enum ComponentType
+  PcBuildBuilder ..> PcBuild : creates
+  PcBuild "1" o-- "*" PcComponent : components
+  PcComponent --> ComponentType
+}
+
+package "Strategy" #E8F7EF {
+  interface BuildSelectionStrategy {
+    + select(candidates: List<PcBuild>): PcBuild
+    + getName(): String
+  }
+  class EconomyStrategy
+  class PerformanceStrategy
+  BuildSelectionStrategy <|.. EconomyStrategy
+  BuildSelectionStrategy <|.. PerformanceStrategy
+  BuildSelectionStrategy ..> PcBuild
+}
+
+package "Facade / Services" #FFF1DD {
+  class SetupFacade {
+    + createBuild(...): PcBuild
+    + recommendBuild(...): PcBuild
+    + saveBuild(build: PcBuild): void
+    + getSavedBuilds(): List<PcBuild>
+    + updateBuild(...): PcBuild
+    + deleteBuild(id: String): boolean
+    + addObserver(observer: BuildObserver): void
+  }
+  class BuildRecommendationService {
+    + recommend(name: String, budget: long, strategy: BuildSelectionStrategy): PcBuild
+  }
+  class CompatibilityService {
+    + validate(build: PcBuild): List<String>
+  }
+  class ComponentCatalog {
+    + getAll(): List<PcComponent>
+    + findByType(type: ComponentType): List<PcComponent>
+  }
+  class JsonBuildRepository {
+    + findAll(): List<PcBuild>
+    + save(build: PcBuild): void
+    + deleteById(id: String): boolean
+  }
+  SetupFacade *-- BuildRecommendationService
+  SetupFacade *-- CompatibilityService
+  SetupFacade --> JsonBuildRepository
+  SetupFacade ..> PcBuildBuilder : builds
+  SetupFacade ..> BuildSelectionStrategy
+  BuildRecommendationService --> ComponentCatalog
+  BuildRecommendationService --> CompatibilityService
+  BuildRecommendationService ..> BuildSelectionStrategy : selects with
+  BuildRecommendationService ..> PcBuildBuilder : creates candidates
+  JsonBuildRepository ..> PcBuild : persists
+}
+
+package "Observer" #F4EAFE {
+  interface BuildObserver {
+    + onBuildChanged(event: BuildEvent): void
+  }
+  class BuildEventPublisher {
+    + addObserver(observer: BuildObserver): void
+    + removeObserver(observer: BuildObserver): void
+    + notifyObservers(event: BuildEvent): void
+  }
+  class SavedBuildsObserver
+  class NotificationObserver
+  class BuildEvent <<record>>
+  enum BuildEventType {
+    CREATED
+    UPDATED
+    DELETED
+  }
+  BuildObserver <|.. SavedBuildsObserver
+  BuildObserver <|.. NotificationObserver
+  BuildEventPublisher o-- "*" BuildObserver : subscribers
+  BuildEventPublisher ..> BuildEvent : publishes
+  BuildObserver ..> BuildEvent
+  BuildEvent --> BuildEventType
+  SavedBuildsObserver --> SetupFacade : reloads builds
+  SetupFacade *-- BuildEventPublisher
+}
+
+package "Decorator" #FFF5E8 {
+  interface PricedBuild {
+    + getPrice(): long
+    + getDescription(): String
+  }
+  class BasePricedBuild
+  abstract class BuildServiceDecorator {
+    # wrappedBuild: PricedBuild
+  }
+  class AssemblyDecorator
+  class WarrantyDecorator
+  class OsInstallationDecorator
+  PricedBuild <|.. BasePricedBuild
+  PricedBuild <|.. BuildServiceDecorator
+  BuildServiceDecorator <|-- AssemblyDecorator
+  BuildServiceDecorator <|-- WarrantyDecorator
+  BuildServiceDecorator <|-- OsInstallationDecorator
+  BuildServiceDecorator o--> PricedBuild : wraps
+  BasePricedBuild --> PcBuild
+}
+
+package "Factory Method / Export" #E7F7F8 {
+  interface BuildExporter {
+    + export(build: PcBuild, pricedBuild: PricedBuild): String
+    + getExtension(): String
+  }
+  abstract class ExportFactory {
+    + createExporter(): BuildExporter
+    + exportToFile(...): Path
+  }
+  class TxtExportFactory
+  class HtmlExportFactory
+  class TxtExporter
+  class HtmlExporter
+  ExportFactory <|-- TxtExportFactory
+  ExportFactory <|-- HtmlExportFactory
+  BuildExporter <|.. TxtExporter
+  BuildExporter <|.. HtmlExporter
+  TxtExportFactory ..> TxtExporter : creates
+  HtmlExportFactory ..> HtmlExporter : creates
+  ExportFactory ..> BuildExporter
+  BuildExporter ..> PricedBuild
+  BuildExporter ..> PcBuild
+}
+
+package "GUI / Persistence" #F0F0F0 {
+  class MainFrame
+  class BuildPanel
+  class SavedBuildsPanel
+  class EditBuildDialog
+  class CatalogPanel
+  class BuildServiceRepository {
+    + findByBuildId(id: String): ServiceSelection
+    + save(id: String, selection: ServiceSelection): void
+    + delete(id: String): void
+  }
+  MainFrame *-- BuildPanel
+  MainFrame *-- SavedBuildsPanel
+  MainFrame *-- CatalogPanel
+  MainFrame ..> SavedBuildsObserver : registers
+  MainFrame ..> NotificationObserver : registers
+  BuildPanel --> SetupFacade
+  BuildPanel --> BuildServiceRepository
+  BuildPanel ..> PricedBuild : applies services
+  BuildPanel ..> ExportFactory : exports
+  SavedBuildsPanel --> SetupFacade
+  SavedBuildsPanel --> BuildServiceRepository
+  SavedBuildsPanel ..> EditBuildDialog : opens
+  EditBuildDialog --> SetupFacade
+  CatalogPanel --> ComponentCatalog
+  SavedBuildsObserver ..> SavedBuildsPanel : refresh callback
+}
+
+@enduml
