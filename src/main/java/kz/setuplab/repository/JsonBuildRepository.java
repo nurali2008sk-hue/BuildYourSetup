@@ -32,6 +32,10 @@ public class JsonBuildRepository {
                 .create();
     }
 
+    public Path getFilePath() {
+        return file;
+    }
+
     public List<PcBuild> findAll() throws IOException {
         if (!Files.exists(file)) {
             return new ArrayList<>();

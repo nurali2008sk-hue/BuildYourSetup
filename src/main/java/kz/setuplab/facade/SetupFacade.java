@@ -5,6 +5,8 @@ import kz.setuplab.data.ComponentCatalog;
 import kz.setuplab.model.PcBuild;
 import kz.setuplab.model.PcComponent;
 import kz.setuplab.repository.JsonBuildRepository;
+import kz.setuplab.repository.BuildServiceRepository;
+import kz.setuplab.repository.BuildServiceRepository.ServiceSelection;
 import kz.setuplab.service.BuildRecommendationService;
 import kz.setuplab.service.CompatibilityService;
 import kz.setuplab.strategy.BuildSelectionStrategy;
@@ -23,6 +25,7 @@ public class SetupFacade {
     private final CompatibilityService compatibilityService;
     private final BuildRecommendationService recommendationService;
     private final JsonBuildRepository repository;
+    private final BuildServiceRepository serviceRepository;
 
     private final BuildEventPublisher publisher =
             new BuildEventPublisher();
@@ -39,6 +42,9 @@ public class SetupFacade {
         compatibilityService = new CompatibilityService();
         recommendationService = new BuildRecommendationService(catalog);
         this.repository = repository;
+        serviceRepository = new BuildServiceRepository(
+                repository.getFilePath().resolveSibling("build-services.json")
+        );
     }
 
     // Observer registration
@@ -97,32 +103,64 @@ public class SetupFacade {
         return build;
     }
 
-    // Save build and notify observers
-    public void saveBuild(PcBuild build) throws IOException {
+    public ServiceSelection getBuildServices(String buildId) throws IOException {
+        if (buildId == null || buildId.isBlank()) {
+            throw new IllegalArgumentException("Invalid build ID.");
+        }
+        return serviceRepository.findByBuildId(buildId);
+    }
 
+    public void saveBuild(PcBuild build) throws IOException {
         if (build == null) {
-            throw new IllegalArgumentException(
-                    "Create a build first."
-            );
+            throw new IllegalArgumentException("Create a build first.");
+        }
+        saveBuild(build, getBuildServices(build.getId()));
+    }
+
+    public void saveBuild(PcBuild build, ServiceSelection services)
+            throws IOException {
+        if (build == null || services == null) {
+            throw new IllegalArgumentException("Build and services are required.");
         }
 
         validateBuild(build, Long.MAX_VALUE);
 
-        boolean exists = repository.findAll()
-                .stream()
-                .anyMatch(saved ->
-                        saved.getId().equals(build.getId())
-                );
+        boolean exists = repository.findAll().stream()
+                .anyMatch(saved -> saved.getId().equals(build.getId()));
 
-        repository.save(build);
+        boolean hadServices = serviceRepository.containsBuildId(build.getId());
+        ServiceSelection previous = getBuildServices(build.getId());
 
-        BuildEventType type = exists
-                ? BuildEventType.UPDATED
-                : BuildEventType.CREATED;
+        serviceRepository.save(build.getId(), services);
 
-        publisher.notifyObservers(
-                new BuildEvent(type, build.getId())
-        );
+        try {
+            repository.save(build);
+        } catch (IOException exception) {
+            restoreServices(build.getId(), hadServices, previous, exception);
+            throw exception;
+        }
+
+        publisher.notifyObservers(new BuildEvent(
+                exists ? BuildEventType.UPDATED : BuildEventType.CREATED,
+                build.getId()
+        ));
+    }
+
+    private void restoreServices(
+            String buildId,
+            boolean hadServices,
+            ServiceSelection previous,
+            IOException originalError
+    ) {
+        try {
+            if (hadServices) {
+                serviceRepository.save(buildId, previous);
+            } else {
+                serviceRepository.delete(buildId);
+            }
+        } catch (IOException rollbackError) {
+            originalError.addSuppressed(rollbackError);
+        }
     }
 
     // Get all saved builds
@@ -195,24 +233,26 @@ public class SetupFacade {
         return updatedBuild;
     }
 
-    // Delete build
     public boolean deleteBuild(String id) throws IOException {
-
         if (id == null || id.isBlank()) {
-            throw new IllegalArgumentException(
-                    "Select a saved build."
-            );
+            throw new IllegalArgumentException("Select a saved build.");
         }
 
-        boolean deleted = repository.deleteById(id);
+        boolean hadServices = serviceRepository.containsBuildId(id);
+        ServiceSelection previous = getBuildServices(id);
+
+        serviceRepository.delete(id);
+
+        boolean deleted;
+        try {
+            deleted = repository.deleteById(id);
+        } catch (IOException exception) {
+            restoreServices(id, hadServices, previous, exception);
+            throw exception;
+        }
 
         if (deleted) {
-            publisher.notifyObservers(
-                    new BuildEvent(
-                            BuildEventType.DELETED,
-                            id
-                    )
-            );
+            publisher.notifyObservers(new BuildEvent(BuildEventType.DELETED, id));
         }
 
         return deleted;

@@ -41,7 +41,6 @@ import java.util.Map;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import kz.setuplab.repository.BuildServiceRepository;
 import kz.setuplab.repository.BuildServiceRepository.ServiceSelection;
 
 public class BuildPanel extends JPanel {
@@ -63,11 +62,6 @@ public class BuildPanel extends JPanel {
     private final JTextArea resultArea = new JTextArea();
 
     private final SetupFacade facade;
-
-    private final BuildServiceRepository serviceRepository =
-            new BuildServiceRepository(
-                    Path.of("data", "build-services.json")
-            );
 
     private ServiceSelection getSelectedServices() {
         return new ServiceSelection(
@@ -273,6 +267,7 @@ public class BuildPanel extends JPanel {
         return currentBuild;
     }
 
+
     private PcBuild keepCurrentId(PcBuild candidate) {
         if (currentBuild == null) {
             return candidate;
@@ -292,26 +287,18 @@ public class BuildPanel extends JPanel {
     private void startNewBuild() {
         currentBuild = null;
         nameField.setText("");
-
         resultArea.setText(
                 "New build started. Enter a name and configure components."
         );
-
         resultArea.setCaretPosition(0);
         nameField.requestFocusInWindow();
     }
-
 
     private void saveBuild() {
         try {
             PcBuild build = buildFromSelection();
 
-            facade.saveBuild(build);
-
-            serviceRepository.save(
-                    build.getId(),
-                    getSelectedServices()
-            );
+            facade.saveBuild(build, getSelectedServices());
 
             showBuild(build, "Build saved successfully");
 
@@ -335,7 +322,7 @@ public class BuildPanel extends JPanel {
         }
 
         ServiceSelection services =
-                serviceRepository.findByBuildId(build.getId());
+                facade.getBuildServices(build.getId());
 
         nameField.setText(build.getName());
 

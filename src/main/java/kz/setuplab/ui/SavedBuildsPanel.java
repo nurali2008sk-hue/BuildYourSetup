@@ -4,7 +4,6 @@ package kz.setuplab.ui;
 import kz.setuplab.facade.SetupFacade;
 import kz.setuplab.model.PcBuild;
 import kz.setuplab.model.PcComponent;
-import kz.setuplab.repository.BuildServiceRepository;
 import kz.setuplab.repository.BuildServiceRepository.ServiceSelection;
 
 import javax.swing.BorderFactory;
@@ -27,7 +26,6 @@ import java.awt.FlowLayout;
 import java.awt.Window;
 import java.io.IOException;
 import java.util.List;
-import java.nio.file.Path;
 import java.util.function.Consumer;
 
 public class SavedBuildsPanel extends JPanel {
@@ -35,8 +33,6 @@ public class SavedBuildsPanel extends JPanel {
     private final SetupFacade facade;
     private final List<PcComponent> availableComponents;
     private final Consumer<PcBuild> onLoadBuild;
-    private final BuildServiceRepository serviceRepository =
-            new BuildServiceRepository(Path.of("data", "build-services.json"));
     private final JButton loadButton = new JButton("Load in Configurator");
 
     private final DefaultListModel<PcBuild> listModel =
@@ -321,7 +317,7 @@ public class SavedBuildsPanel extends JPanel {
                 .append(build.getTotalPrice())
                 .append(" KZT\n");
         try {
-            ServiceSelection services = serviceRepository.findByBuildId(build.getId());
+            ServiceSelection services = facade.getBuildServices(build.getId());
             text.append("Optional services:\n");
             if (services.assembly()) text.append("Professional assembly: +15000 KZT\n");
             if (services.warranty()) text.append("Extended warranty: +20000 KZT\n");
@@ -354,7 +350,7 @@ public class SavedBuildsPanel extends JPanel {
     }
 
     private long getFinalPrice(PcBuild build) throws IOException {
-        ServiceSelection services = serviceRepository.findByBuildId(build.getId());
+        ServiceSelection services = facade.getBuildServices(build.getId());
         long price = build.getTotalPrice();
         if (services.assembly()) price = Math.addExact(price, 15000);
         if (services.warranty()) price = Math.addExact(price, 20000);
@@ -386,10 +382,7 @@ public class SavedBuildsPanel extends JPanel {
         try {
 
             // Observer automatically refreshes the list
-            boolean deleted = facade.deleteBuild(build.getId());
-            if (deleted) {
-                serviceRepository.delete(build.getId());
-            }
+            facade.deleteBuild(build.getId());
 
         } catch (IOException exception) {
 

@@ -56,6 +56,11 @@ public class BuildServiceRepository {
         }
     }
 
+    public boolean containsBuildId(String buildId) throws IOException {
+        Objects.requireNonNull(buildId);
+        return readAll().containsKey(buildId);
+    }
+
     public ServiceSelection findByBuildId(String buildId)
             throws IOException {
         Objects.requireNonNull(buildId);
