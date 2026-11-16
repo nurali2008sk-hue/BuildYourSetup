@@ -1,5 +1,6 @@
 
 package kz.setuplab.repository;
+import kz.setuplab.model.AdditionalService;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -13,6 +14,8 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.ArrayList;
+import java.util.List;
 
 public class BuildServiceRepository {
 
@@ -20,7 +23,35 @@ public class BuildServiceRepository {
             boolean assembly,
             boolean warranty,
             boolean osInstallation
-    ) {}
+    ) {
+        public List<AdditionalService> selectedServices() {
+            List<AdditionalService> services = new ArrayList<>();
+
+            if (assembly) {
+                services.add(AdditionalService.ASSEMBLY);
+            }
+
+            if (warranty) {
+                services.add(AdditionalService.WARRANTY);
+            }
+
+            if (osInstallation) {
+                services.add(AdditionalService.OS_INSTALLATION);
+            }
+
+            return List.copyOf(services);
+        }
+
+        public long totalPrice() {
+            long total = 0;
+
+            for (AdditionalService service : selectedServices()) {
+                total = Math.addExact(total, service.price());
+            }
+
+            return total;
+        }
+    }
 
     private static final Type DATA_TYPE =
             new TypeToken<Map<String, ServiceSelection>>() {}.getType();

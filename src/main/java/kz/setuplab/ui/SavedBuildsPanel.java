@@ -350,12 +350,13 @@ public class SavedBuildsPanel extends JPanel {
     }
 
     private long getFinalPrice(PcBuild build) throws IOException {
-        ServiceSelection services = facade.getBuildServices(build.getId());
-        long price = build.getTotalPrice();
-        if (services.assembly()) price = Math.addExact(price, 15000);
-        if (services.warranty()) price = Math.addExact(price, 20000);
-        if (services.osInstallation()) price = Math.addExact(price, 10000);
-        return price;
+        ServiceSelection services =
+                facade.getBuildServices(build.getId());
+
+        return Math.addExact(
+                build.getTotalPrice(),
+                services.totalPrice()
+        );
     }
 
     // Delete selected build

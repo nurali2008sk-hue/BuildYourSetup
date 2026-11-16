@@ -1,8 +1,11 @@
 
 package kz.setuplab.decorator;
 
+import kz.setuplab.model.AdditionalService;
+
 public class WarrantyDecorator extends BuildServiceDecorator {
-    public static final long PRICE = 20000;
+    public static final long PRICE =
+            AdditionalService.WARRANTY.price();
 
     public WarrantyDecorator(PricedBuild wrappedBuild) {
         super(wrappedBuild);

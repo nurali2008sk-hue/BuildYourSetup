@@ -448,17 +448,7 @@ public class BuildPanel extends JPanel {
     }
 
     private long selectedServicesPrice() {
-        long total = 0;
-        if (assemblyBox.isSelected()) {
-            total = Math.addExact(total, AssemblyDecorator.PRICE);
-        }
-        if (warrantyBox.isSelected()) {
-            total = Math.addExact(total, WarrantyDecorator.PRICE);
-        }
-        if (osBox.isSelected()) {
-            total = Math.addExact(total, OsInstallationDecorator.PRICE);
-        }
-        return total;
+        return getSelectedServices().totalPrice();
     }
 
     private long budgetForComponents(long budget) {
